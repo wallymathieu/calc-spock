@@ -18,52 +18,46 @@ import           Domain
 
 
 
-type State = STM (TVar [Calculation])
-type Api = SpockM () () State ()
+data AppState = AppState { added :: TVar [String] }
 
-type ApiAction a = SpockAction () () State a
+initAppState :: IO AppState
+initAppState = atomically $ do
+    added <- newTVar []
+    return (AppState {added=added})
 
-getAll :: ApiAction [Calculation]
+type Api = SpockM () () AppState ()
+
+type ApiAction a = SpockAction () () AppState a
+
+getAll :: ApiAction [String]
 getAll = do
+  data' <- getState 
+  liftIO (readTVarIO $ added data')
+
+add :: String -> ApiAction String
+add value = do
   data' <- getState
-  liftIO (atomically data' >>= readTVarIO)
-
-addCalc :: Calculation -> ApiAction ()
-addCalc calc = do
-  data' <- getState
-  liftIO (atomically data' >>= doAddCalc calc)
-
-modifyTVar' :: TVar a -> (a -> a) -> STM ()
-modifyTVar' var f = do
-    x <- readTVar var
-    writeTVar var $! f x
-
-doAddCalc :: Calculation -> TVar [Calculation] -> IO ()
-doAddCalc calc state = atomically (modifyTVar' state addToList)
+  liftIO (doAdd value data')
+  return value
   where
-    addToList s = calc : s
+    doAdd :: String -> AppState -> IO ()
+    doAdd value AppState { added = state } = atomically $ do 
+        current <- readTVar state
+        writeTVar state (value : current)
 
-addCalcAction :: ApiAction a
-addCalcAction = do
-    calc <- jsonBody' :: ApiAction Calculation
-    res <- addCalc calc
-    json res
+addAction :: ApiAction a
+addAction = (jsonBody' :: ApiAction String) >>= add >>= json
 
 getAllAction :: ApiAction a
-getAllAction = do
-    calcs <- getAll
-    json calcs
-
+getAllAction = getAll >>= json
+helloWorldText :: String
+helloWorldText = "Hello world"
 sampleAction :: ApiAction a
-sampleAction =
-  let one = Const 1
-      firstCalc = BinaryExpression Plus one one in
-  json firstCalc
+sampleAction = json helloWorldText
 
 app :: Api
 app = do
   get "" sampleAction
-  get "calculations" getAllAction
-  --get ("auction" <//> var) getAuctionAction
-  post "add" addCalcAction
+  get "all" getAllAction
+  post "" addAction
  

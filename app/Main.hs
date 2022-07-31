@@ -14,11 +14,12 @@ import           Control.Monad.IO.Class (liftIO)
 import qualified Network.HTTP.Types.Status as Http
 import qualified Data.Text       as T
 import qualified Data.List       as L
-import           Web             (app)
+import           Web             (app, initAppState)
 
 
 
 main :: IO ()
 main = do
-  spockCfg <- defaultSpockCfg () PCNoDatabase (newTVar [])
+  state <- initAppState
+  spockCfg <- defaultSpockCfg () PCNoDatabase state
   runSpock 8080 (spock spockCfg app)
